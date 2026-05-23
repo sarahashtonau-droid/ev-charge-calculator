@@ -310,6 +310,26 @@
 
   .stop-btn:active { opacity: 0.7; }
 
+  .watch-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    border: 0.5px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .watch-btn:active { opacity: 0.7; }
+
   .countdown-card {
     background: var(--surface);
     border: 0.5px solid var(--accent);
@@ -460,10 +480,16 @@
 
   <p class="clock-note" id="clockNote" style="display:none">⌚ Timer also sent to Clock app</p>
 
-  <button class="start-btn" id="startBtn" onclick="startCharge()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-    Start Charge
-  </button>
+  <div id="startButtons">
+    <button class="start-btn" id="startBtn" onclick="startCharge()" style="margin-bottom: 8px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Start Charge
+    </button>
+    <button class="watch-btn" id="watchBtn" onclick="sendToWatch()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="3" rx="1"/><rect x="5" y="5" width="14" height="16" rx="3"/><path d="M9 22h6"/><path d="M12 10v4l2 2"/></svg>
+      Set Watch Timer
+    </button>
+  </div>
 
   <button class="stop-btn" id="stopBtn" style="display:none" onclick="stopCharge()">Stop &amp; Reset</button>
 
@@ -542,7 +568,22 @@ function syncSlider(inputId, sliderId) {
   slider.addEventListener('input', () => { input.value = slider.value; calculate(); });
 }
 
-let countdownInterval = null;
+function sendToWatch() {
+  const pct = parseFloat(document.getElementById('currentPct').value) / 100;
+  const rate = parseFloat(document.getElementById('chargeRate').value);
+  if (isNaN(pct) || isNaN(rate) || rate <= 0 || pct >= TARGET) return;
+
+  const kwhNeeded = (TARGET - pct) * BATTERY;
+  const kwhDraw = kwhNeeded / efficiency;
+  const hours = kwhDraw / rate;
+  const totalSeconds = Math.round(hours * 3600);
+
+  // Open Shortcuts with duration in seconds passed as input
+  const shortcutUrl = `shortcuts://run-shortcut?name=Charge%20Timer&input=${totalSeconds}`;
+  window.location.href = shortcutUrl;
+}
+
+
 let finishTimestamp = null;
 
 function startCharge() {
