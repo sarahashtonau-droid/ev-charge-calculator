@@ -308,24 +308,82 @@
     transition: opacity 0.15s;
   }
 
-  .stop-btn:active { opacity: 0.7; }
+  .compact-card { padding: 12px 16px; }
+
+  .compact-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .compact-left {
+    display: flex;
+    flex-direction: column;
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+
+  .compact-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 2px;
+  }
+
+  .compact-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 26px;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .compact-unit {
+    font-size: 14px;
+    color: var(--muted);
+    margin-left: 2px;
+  }
+
+  .compact-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 99px;
+    outline: none;
+  }
+
+  .compact-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 0 4px var(--accent-dim);
+  }
 
   .watch-btn {
     width: 100%;
-    padding: 14px;
+    padding: 16px;
     border-radius: 14px;
-    border: 0.5px solid var(--accent);
+    border: 1.5px solid var(--accent);
     background: transparent;
     color: var(--accent);
     font-family: 'DM Sans', sans-serif;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
     transition: opacity 0.15s;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    letter-spacing: -0.2px;
   }
 
   .watch-btn:active { opacity: 0.7; }
@@ -397,22 +455,26 @@
 
 <div class="main">
 
-  <div class="card">
-    <div class="card-label">Current charge</div>
-    <div class="input-row">
-      <input class="big-input" type="number" id="currentPct" min="0" max="79" value="30" step="1" inputmode="numeric">
-      <span class="unit">%</span>
+  <div class="card compact-card">
+    <div class="compact-row">
+      <div class="compact-left">
+        <span class="compact-label">Current charge</span>
+        <span class="compact-value"><span id="currentPctDisplay">30</span><span class="compact-unit">%</span></span>
+      </div>
+      <input type="range" class="compact-slider" id="currentSlider" min="0" max="79" value="30" step="1">
     </div>
-    <input type="range" id="currentSlider" min="0" max="79" value="30" step="1">
+    <input type="number" id="currentPct" min="0" max="79" value="30" step="1" inputmode="numeric" style="display:none">
   </div>
 
-  <div class="card">
-    <div class="card-label">Charge rate</div>
-    <div class="input-row">
-      <input class="big-input" type="number" id="chargeRate" min="0.1" max="175" value="11" step="0.5" inputmode="decimal">
-      <span class="unit">kW</span>
+  <div class="card compact-card">
+    <div class="compact-row">
+      <div class="compact-left">
+        <span class="compact-label">Charge rate</span>
+        <span class="compact-value"><span id="chargeRateDisplay">11</span><span class="compact-unit">kW</span></span>
+      </div>
+      <input type="range" class="compact-slider" id="rateSlider" min="1" max="175" value="11" step="0.5">
     </div>
-    <input type="range" id="rateSlider" min="1" max="175" value="11" step="0.5">
+    <input type="number" id="chargeRate" min="0.1" max="175" value="11" step="0.5" inputmode="decimal" style="display:none">
   </div>
 
   <div class="card">
@@ -627,10 +689,8 @@ function startCharge() {
   document.getElementById('startBtn').style.display = 'none';
   document.getElementById('stopBtn').style.display = 'block';
 
-  // Lock inputs
-  document.getElementById('currentPct').disabled = true;
+  // Lock sliders
   document.getElementById('currentSlider').disabled = true;
-  document.getElementById('chargeRate').disabled = true;
   document.getElementById('rateSlider').disabled = true;
   document.getElementById('btnAC').disabled = true;
   document.getElementById('btnDC').disabled = true;
@@ -669,24 +729,31 @@ function stopCharge() {
   document.getElementById('startBtn').style.display = 'flex';
   document.getElementById('stopBtn').style.display = 'none';
 
-  // Unlock inputs
-  document.getElementById('currentPct').disabled = false;
+  // Unlock sliders
   document.getElementById('currentSlider').disabled = false;
-  document.getElementById('chargeRate').disabled = false;
   document.getElementById('rateSlider').disabled = false;
   document.getElementById('btnAC').disabled = false;
   document.getElementById('btnDC').disabled = false;
 }
 
-function syncSlider(inputId, sliderId) {
+function syncSlider(inputId, sliderId, displayId) {
   const input = document.getElementById(inputId);
   const slider = document.getElementById(sliderId);
-  input.addEventListener('input', () => { slider.value = input.value; calculate(); });
-  slider.addEventListener('input', () => { input.value = slider.value; calculate(); });
+  const display = displayId ? document.getElementById(displayId) : null;
+  slider.addEventListener('input', () => {
+    input.value = slider.value;
+    if (display) display.textContent = slider.value;
+    calculate();
+  });
+  input.addEventListener('input', () => {
+    slider.value = input.value;
+    if (display) display.textContent = input.value;
+    calculate();
+  });
 }
 
-syncSlider('currentPct', 'currentSlider');
-syncSlider('chargeRate', 'rateSlider');
+syncSlider('currentPct', 'currentSlider', 'currentPctDisplay');
+syncSlider('chargeRate', 'rateSlider', 'chargeRateDisplay');
 
 calculate();
 
