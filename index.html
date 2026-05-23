@@ -640,17 +640,10 @@ function sendToWatch() {
   const hours = kwhDraw / rate;
   const totalSeconds = Math.round(hours * 3600);
 
-  // Alarm fires 15 minutes before charge completes
-  const alarmTime = new Date(Date.now() + totalSeconds * 1000 - 15 * 60 * 1000);
-  const alarmH = String(alarmTime.getHours()).padStart(2, '0');
-  const alarmM = String(alarmTime.getMinutes()).padStart(2, '0');
-  const alarmStr = `${alarmH}:${alarmM}`;
-
-  // Pass alarm offset in seconds — shortcut converts to alarm time
-  const alarmSeconds = Math.round((totalSeconds) - 15 * 60);
-  const shortcutUrl = `shortcuts://run-shortcut?name=Charge%20Timer&input=${alarmSeconds}`;
+  const shortcutUrl = `shortcuts://run-shortcut?name=Charge%20Timer&input=${totalSeconds}`;
   window.location.href = shortcutUrl;
 }
+
 
 
 let finishTimestamp = null;
