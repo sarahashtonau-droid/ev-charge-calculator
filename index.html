@@ -272,6 +272,89 @@
     font-weight: 500;
   }
 
+  .start-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent);
+    color: #000;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: -0.2px;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .start-btn:active { opacity: 0.8; }
+  .start-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .stop-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    border: 0.5px solid var(--border2);
+    background: transparent;
+    color: var(--warn);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .stop-btn:active { opacity: 0.7; }
+
+  .countdown-card {
+    background: var(--surface);
+    border: 0.5px solid var(--accent);
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+    display: none;
+  }
+
+  .countdown-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+
+  .countdown-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 52px;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+
+  .countdown-finish {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .countdown-finish span {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .clock-note {
+    font-size: 11px;
+    color: var(--hint);
+    text-align: center;
+    margin-top: 4px;
+  }
+
   .footnote {
     font-size: 11px;
     color: var(--hint);
@@ -341,9 +424,13 @@
           <div class="result-label">From charger</div>
           <div class="result-value" id="kwhDraw">—</div>
         </div>
-        <div class="result-cell span2">
+        <div class="result-cell">
           <div class="result-label">Time to 80%</div>
           <div class="result-value accent" id="timeResult">—</div>
+        </div>
+        <div class="result-cell">
+          <div class="result-label">Charged by</div>
+          <div class="result-value accent" id="finishTime">—</div>
         </div>
       </div>
 
@@ -364,6 +451,21 @@
       </div>
     </div>
   </div>
+
+  <div class="countdown-card" id="countdownCard">
+    <div class="countdown-label">Time remaining</div>
+    <div class="countdown-time" id="countdownDisplay">00:00</div>
+    <div class="countdown-finish">Charged by <span id="countdownFinish">—</span></div>
+  </div>
+
+  <p class="clock-note" id="clockNote" style="display:none">⌚ Timer also sent to Clock app</p>
+
+  <button class="start-btn" id="startBtn" onclick="startCharge()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Start Charge
+  </button>
+
+  <button class="stop-btn" id="stopBtn" style="display:none" onclick="stopCharge()">Stop &amp; Reset</button>
 
   <p class="footnote">Charging losses applied · 80% daily limit recommended for NMC battery</p>
 
@@ -414,9 +516,13 @@ function calculate() {
   const hours = kwhDraw / rate;
   const pctToAdd = Math.round((TARGET - pct) * 100);
 
+  const finishDate = new Date(Date.now() + hours * 3600000);
+  const finishStr = finishDate.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false });
+
   document.getElementById('kwhNeeded').textContent = kwhNeeded.toFixed(1) + ' kWh';
   document.getElementById('kwhDraw').textContent = kwhDraw.toFixed(1) + ' kWh';
   document.getElementById('timeResult').textContent = formatTime(hours);
+  document.getElementById('finishTime').textContent = finishStr;
   document.getElementById('barLabelLeft').textContent = 'Current: ' + Math.round(pct * 100) + '%';
   document.getElementById('barFooter').textContent = pctToAdd + '% to add';
   document.getElementById('kwhFooter').textContent = kwhNeeded.toFixed(1) + ' kWh net';
@@ -436,10 +542,113 @@ function syncSlider(inputId, sliderId) {
   slider.addEventListener('input', () => { input.value = slider.value; calculate(); });
 }
 
+let countdownInterval = null;
+let finishTimestamp = null;
+
+function startCharge() {
+  const pct = parseFloat(document.getElementById('currentPct').value) / 100;
+  const rate = parseFloat(document.getElementById('chargeRate').value);
+  if (isNaN(pct) || isNaN(rate) || rate <= 0 || pct >= TARGET) return;
+
+  const kwhNeeded = (TARGET - pct) * BATTERY;
+  const kwhDraw = kwhNeeded / efficiency;
+  const hours = kwhDraw / rate;
+  const totalSeconds = Math.round(hours * 3600);
+
+  finishTimestamp = Date.now() + totalSeconds * 1000;
+
+  const finishDate = new Date(finishTimestamp);
+  const finishStr = finishDate.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  // Try native Clock app timer
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const clockUrl = `clock-timer://set?hours=${h}&minutes=${m}&seconds=${s}`;
+  const fallback = `timer://${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  // Try to open Clock app, show note if it worked
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = clockUrl;
+  document.body.appendChild(iframe);
+  setTimeout(() => {
+    document.body.removeChild(iframe);
+    // Also try fallback scheme
+    window.location.href = fallback;
+  }, 300);
+
+  document.getElementById('clockNote').style.display = 'block';
+
+  // Start in-page countdown regardless
+  document.getElementById('countdownCard').style.display = 'block';
+  document.getElementById('countdownFinish').textContent = finishStr;
+  document.getElementById('startBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = 'block';
+
+  // Lock inputs
+  document.getElementById('currentPct').disabled = true;
+  document.getElementById('currentSlider').disabled = true;
+  document.getElementById('chargeRate').disabled = true;
+  document.getElementById('rateSlider').disabled = true;
+  document.getElementById('btnAC').disabled = true;
+  document.getElementById('btnDC').disabled = true;
+
+  tickCountdown();
+  countdownInterval = setInterval(tickCountdown, 1000);
+}
+
+function tickCountdown() {
+  const remaining = Math.max(0, finishTimestamp - Date.now());
+  const totalSecs = Math.floor(remaining / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+
+  const display = h > 0
+    ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+    : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  document.getElementById('countdownDisplay').textContent = display;
+
+  if (remaining <= 0) {
+    clearInterval(countdownInterval);
+    document.getElementById('countdownDisplay').textContent = '✓ Done';
+    document.getElementById('countdownLabel') && (document.getElementById('countdownLabel').textContent = 'Charge complete');
+  }
+}
+
+function stopCharge() {
+  clearInterval(countdownInterval);
+  countdownInterval = null;
+  finishTimestamp = null;
+
+  document.getElementById('countdownCard').style.display = 'none';
+  document.getElementById('clockNote').style.display = 'none';
+  document.getElementById('startBtn').style.display = 'flex';
+  document.getElementById('stopBtn').style.display = 'none';
+
+  // Unlock inputs
+  document.getElementById('currentPct').disabled = false;
+  document.getElementById('currentSlider').disabled = false;
+  document.getElementById('chargeRate').disabled = false;
+  document.getElementById('rateSlider').disabled = false;
+  document.getElementById('btnAC').disabled = false;
+  document.getElementById('btnDC').disabled = false;
+}
+
+function syncSlider(inputId, sliderId) {
+  const input = document.getElementById(inputId);
+  const slider = document.getElementById(sliderId);
+  input.addEventListener('input', () => { slider.value = input.value; calculate(); });
+  slider.addEventListener('input', () => { input.value = slider.value; calculate(); });
+}
+
 syncSlider('currentPct', 'currentSlider');
 syncSlider('chargeRate', 'rateSlider');
 
 calculate();
+
 </script>
 </body>
 </html>
